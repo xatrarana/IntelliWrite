@@ -1,9 +1,12 @@
 "use server";
 import { DEFAULT_LOGIN_REDIRECT_URL } from '@/routes';
-import { LoginSchema, RegisterSchema } from '@/schemas';
+import { LoginSchema } from '@/schemas';
 import { AuthError } from 'next-auth';
 import { signIn } from '@/auth';
 import * as z from 'zod';
+import { getUserByEmail } from '@/data/user';
+import { generateVerificationToken } from '@/lib/token';
+import { sendVerificationEmail } from '@/lib/mail';
 
 export const login = async (values:z.infer<typeof LoginSchema>) => {
     
@@ -15,6 +18,17 @@ export const login = async (values:z.infer<typeof LoginSchema>) => {
 
 
     const {email, password} = validatedFields.data;
+
+    const existingUser = await getUserByEmail(email);
+    if(!existingUser || !existingUser.email || !existingUser.passwordHash) {
+        return {error: "No associated account found!"};
+    }
+
+    if(!existingUser.emailVerified) {
+        const verificationToken = await generateVerificationToken(existingUser.email);
+        await sendVerificationEmail(verificationToken?.email!, verificationToken?.token!);
+        return {success: "Email not verified! Confirmation email sent!"};
+    }
 
     try {
 
